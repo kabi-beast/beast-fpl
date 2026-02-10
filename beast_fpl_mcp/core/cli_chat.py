@@ -48,13 +48,48 @@ class CliChat(Chat):
             for doc_id, content in mentioned_docs
         )
 
-    async def _process_command(self, query: str) -> bool:
+    async def _process_command(self, query: str):
+        """Handle slash-commands.
+
+        Returns:
+        - `True` if the command was handled by loading a prompt into
+          `self.messages` (so the agent should continue processing).
+        - A `str` if the command produced an immediate textual response
+          that should be returned to the caller (short-circuit).
+        - `False` if the input was not a command.
+        """
         if not query.startswith("/"):
             return False
 
         words = query.split()
         command = words[0].replace("/", "")
 
+        # Special-case FPL command: /list players
+        if command == "list" and len(words) >= 2 and words[1].lower() == "players":
+            import asyncio
+            import json
+            import urllib.request
+
+            async def _fetch_players_text() -> str:
+                url = "https://fantasy.premierleague.com/api/bootstrap-static/"
+
+                def _fetch():
+                    with urllib.request.urlopen(url, timeout=15) as resp:
+                        data = json.load(resp)
+                    players = data.get("elements", [])
+                    lines = []
+                    for p in players:
+                        first = p.get("first_name", "").strip()
+                        second = p.get("second_name", "").strip()
+                        web = p.get("web_name", "").strip()
+                        lines.append(f"{first} {second} ({web})")
+                    return "\n".join(lines)
+
+                return await asyncio.to_thread(_fetch)
+
+            return await _fetch_players_text()
+
+        # Fallback to loading a prompt from the doc client (existing behavior)
         messages = await self.doc_client.get_prompt(
             command, {"doc_id": words[1]}
         )
@@ -63,8 +98,14 @@ class CliChat(Chat):
         return True
 
     async def _process_query(self, query: str):
-        if await self._process_command(query):
-            return
+        cmd_result = await self._process_command(query)
+        # Short-circuit: command produced direct textual response
+        if isinstance(cmd_result, str):
+            return cmd_result
+
+        # Command loaded a prompt into messages; continue normally
+        if cmd_result is True:
+            return None
 
         added_resources = await self._extract_resources(query)
 

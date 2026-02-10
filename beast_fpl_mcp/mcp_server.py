@@ -90,5 +90,19 @@ def format_document(
     return [base.UserMessage(prompt)]
 
 
+# Add a lightweight "list" prompt so the CLI's prompt registry includes it
+@mcp.prompt(
+    name="list",
+    description="List resources or items (e.g. 'players').",
+)
+def list_prompt(
+    arg: str = Field(description="What to list e.g. 'players'"),
+) -> list[base.Message]:
+    # This prompt exists primarily for CLI completion. The client implements
+    # the concrete behavior for '/list players'. Returning a simple user
+    # message keeps behavior predictable if used with other agents.
+    return [base.UserMessage(f"list {arg}")]
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")

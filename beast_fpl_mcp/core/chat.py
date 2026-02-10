@@ -11,6 +11,9 @@ class Chat:
         self.messages: list[MessageParam] = []
 
     async def _process_query(self, query: str):
+        """Process the incoming query. Return a string to short-circuit
+        processing and return that text immediately. Otherwise return None.
+        """
         self.messages.append({"role": "user", "content": query})
 
     async def run(
@@ -19,7 +22,9 @@ class Chat:
     ) -> str:
         final_text_response = ""
 
-        await self._process_query(query)
+        short_circuit = await self._process_query(query)
+        if isinstance(short_circuit, str):
+            return short_circuit
 
         while True:
             response = self.claude_service.chat(
